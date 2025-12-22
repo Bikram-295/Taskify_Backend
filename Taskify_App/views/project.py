@@ -1,0 +1,29 @@
+from rest_framework import viewsets
+from Taskify_App.serializers import *
+from Taskify_App.models import *
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from django.http import HttpResponse
+
+# Create your views here.
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticated]
+
+    def destroy(self, request, *args, **kwargs):
+        project = self.get_object()
+        if (request.user.role == 'n') and not project.member.filter(id=request.user.id).exists():
+            return HttpResponse("You don't have permission to delete card in this project.")
+        return super().destroy(request, *args, **kwargs)
+
+
+    def update(self, request, *args, **kwargs):
+        project = self.get_object()
+        if ((request.user.role == 'n') and not project.member.filter(id=request.user.id).exists()):
+            return HttpResponse(
+                "You dont have permission to update card in this project.")
+        return super().update(request, *args, **kwargs)
+
+
