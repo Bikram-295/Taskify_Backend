@@ -1,3 +1,4 @@
+import os
 from rest_framework import viewsets
 from rest_framework.views import APIView
 from Taskify_App.serializers import *
@@ -10,8 +11,39 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
 
-client_id = 'vHvA7kB4GedavN5kSfWRIjvFg1geQQDkJss21yBv'
-client_secret_key = 'cbyjbLHlUnKVwfVCSfE60dpZCU3JM2S7nexDUjZ86azUUAL0DfalA8I411iW9YW4uTM8Gz0BNSrBvhATh4BnQg592QdTMZfPAQOhFurHwqZMZdjLyylHrnRJ6Gwy882D'
+client_id = os.environ.get(
+    'CHANNELI_CLIENT_ID',
+    'vHvA7kB4GedavN5kSfWRIjvFg1geQQDkJss21yBv'
+)
+client_secret_key = os.environ.get(
+    'CHANNELI_CLIENT_SECRET',
+    'cbyjbLHlUnKVwfVCSfE60dpZCU3JM2S7nexDUjZ86azUUAL0DfalA8I411iW9YW4uTM8Gz0BNSrBvhATh4BnQg592QdTMZfPAQOhFurHwqZMZdjLyylHrnRJ6Gwy882D'
+)
+
+
+@api_view(["POST"])
+def demo_login(request):
+    """Guest-only login: creates/returns token for test user. Only when DEBUG=True."""
+    from django.conf import settings
+    if not getattr(settings, 'DEBUG', False):
+        return Response({'error': 'Dev login disabled in production'}, status=403)
+    username = 'devuser'
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        user = User.objects.create_user(
+            username=username,
+            password='devpass123',
+            name='Dev User',
+            email='dev@localhost',
+            year=1,
+            enrollment_no=999999,
+            role='a',
+        )
+        user.is_staff = True
+        user.save()
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({'token': token.key, 'user': UserSerializer(user).data})
 
 
 @api_view(["GET"])
@@ -49,12 +81,18 @@ class OauthCallback(APIView):
 
             }
             url = f'https://channeli.in/open_auth/token/'
-            print("how")
-            response = requests.post(url, data=data).json()
-            print(response,"response")
-            access_token = response['access_token']
+            response_data = requests.post(url, data=data).json()
+            print(response_data, "response")
+            
+            if 'access_token' not in response_data:
+                return JsonResponse({
+                    'error': 'OAuth token exchange failed. If you are using dummy/placeholder credentials, please use the "Dev Login" button on the login page.',
+                    'details': response_data
+                }, status=400)
+                
+            access_token = response_data['access_token']
             request.session['access_token'] = access_token
-            print(access_token,"abc")
+            print(access_token, "abc")
 
             # making a get request to get data
             url_toget_data = 'https://channeli.in/open_auth/get_user_data/'
@@ -111,12 +149,14 @@ class OauthCallback(APIView):
 
 class Logout(APIView):
     def post(self, request):
-        access_token = request.session['access_token']
+        access_token = request.session.get('access_token')
+        if not access_token:
+            return Response({'message': 'Not logged in'}, status=400)
         data = {
             'client_id': client_id,
             'client_secret': client_secret_key,
-            'token': 'access_token',
-            'token_type_hint': access_token
+            'token': access_token,
+            'token_type_hint': 'access_token'
         }
         url = ' https://channeli.in/open_auth/revoke_token/'
         requests.post(url=url, data=data)

@@ -17,6 +17,7 @@ router.register('project_roles', Project_roleViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('auth/', include('rest_framework.urls')),
+    path('demo_login/', demo_login),
     path('oauth/callback/', OauthCallback.as_view()),
     path('logout/', Logout.as_view()),
     path('check_login/', check_login),
